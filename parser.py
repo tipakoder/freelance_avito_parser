@@ -1,8 +1,11 @@
+import re
+import cv2
 import time
 import json
 import base64
 import requests
 import xlsxwriter
+import pytesseract
 from bs4 import BeautifulSoup   
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -39,8 +42,11 @@ def parse(url):
         worksheet.write('A1', 'Имя')
         worksheet.set_column_pixels(1, 1, 165)
         worksheet.write('B1', 'Телефон')
-        worksheet.write('C1', 'Адрес')
-        worksheet.write('D1', 'Текст объявления')
+        worksheet.set_column_pixels(2, 2, 165)
+        worksheet.write('C1', 'Регион')
+        worksheet.write('D1', 'Адрес')
+        worksheet.write('E1', 'Текст объявления')
+        
         
         driver.get(url)
         soup = BeautifulSoup(driver.page_source , "html.parser")
@@ -82,9 +88,12 @@ def parse(url):
                 item_name = "Отсутствует или компания"
             
             item_address = item_page_soup.find("div", attrs={"itemprop": "address"})
+            item_region = "Отсутствует или скрыт"
 
             if(item_address != None):
                 item_address = item_address.text
+                item_region = re.finditer(r"^(.*),", item_address, re.MULTILINE).group(1)
+                print(item_region)
             else:
                 item_address = "Отсутствует или скрыт"
 
@@ -104,11 +113,17 @@ def parse(url):
             with open(item_phone_img_path, "wb") as fh:
                 fh.write(base64.decodebytes(item_phone_img_bs64.encode()))
                 fh.close()
+            
+            item_phone_img = cv2.imread(item_phone_img_path)
+
+            # Преобразуем номер телефон с картинки в строку
+            item_phone = pytesseract.image_to_string(item_phone_img)
 
             worksheet.write('A'+str(row_index), item_name)
-            worksheet.insert_image('B'+str(row_index), item_phone_img_path, {'x_scale': 0.35, 'y_scale': 0.35})
-            worksheet.write('C'+str(row_index), item_address)
-            worksheet.write('D'+str(row_index), item_text)
+            worksheet.write('B'+str(row_index), item_phone)
+            worksheet.write('C'+str(row_index), item_region)
+            worksheet.write('D'+str(row_index), item_address)
+            worksheet.write('E'+str(row_index), item_text)
 
             print(">> processed item " + str(i))
 
@@ -124,4 +139,4 @@ def parse(url):
         workbook.close()
         time.sleep(5)
 
-parse(url=r'https://www.avito.ru/rossiya?q=продажа+евровагонки')
+parse(url=r'https://www.avito.ru/rossiya/remont_i_stroitelstvo/stroymaterialy-ASgBAgICAURYoAI?cd=1&q=продажа+евровагонки')
