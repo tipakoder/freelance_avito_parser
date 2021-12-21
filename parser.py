@@ -18,17 +18,6 @@ def parse(url):
     # Сохраним исходный URL
     start_url = url
 
-    # Создаём XLSX файл и лист в нём
-    workbook = xlsxwriter.Workbook('result.xlsx')
-    worksheet = workbook.add_worksheet()
-    
-    worksheet.set_column_pixels(0, 0, 278)
-    worksheet.write('A1', 'Имя')
-    worksheet.set_column_pixels(1, 1, 165)
-    worksheet.write('B1', 'Телефон')
-    worksheet.write('C1', 'Адрес')
-    worksheet.write('D1', 'Текст объявления')
-
     # Индекс следующей строки в Excel
     row_index = 1
 
@@ -40,6 +29,18 @@ def parse(url):
 
     # Если есть следующая страница
     while(nextPageAvailable):
+        row_index = 1
+
+        # Создаём XLSX файл и лист в нём
+        workbook = xlsxwriter.Workbook('result/result_'+str(page_number)+'.xlsx')
+        worksheet = workbook.add_worksheet()
+        
+        worksheet.set_column_pixels(0, 0, 278)
+        worksheet.write('A1', 'Имя')
+        worksheet.set_column_pixels(1, 1, 165)
+        worksheet.write('B1', 'Телефон')
+        worksheet.write('C1', 'Адрес')
+        worksheet.write('D1', 'Текст объявления')
         
         driver.get(url)
         soup = BeautifulSoup(driver.page_source , "html.parser")
@@ -57,16 +58,17 @@ def parse(url):
         # Получаем все объявления
         items = soup.findChildren("div", attrs={"data-marker": "item"})
 
-        print(items)
+        # Дебаг
+        print("> Page: " + str(page_number))
+        print("> Items count: " + str(len(items)))
 
         # Перебираем объявления
-        for item in items:
+        for i, item in enumerate(items):
             # Увеличиваем индекс строчки, в которую пишемся
             row_index += 1
             
             # Получаем ID объявления и ссылку на него
             item_id = item["data-item-id"]
-            print(item_id)
             item_url = "https://www.avito.ru" + item.findChild("a", attrs={"data-marker": "item-title"})["href"]
 
             # По ссылке получаем имя, адрес и текст объявления
@@ -76,19 +78,28 @@ def parse(url):
 
             if(item_name != None):
                 item_name = item_name.text
+            else:
+                item_name = "Отсутствует или компания"
             
             item_address = item_page_soup.find("div", attrs={"itemprop": "address"})
 
             if(item_address != None):
                 item_address = item_address.text
+            else:
+                item_address = "Отсутствует или скрыт"
 
             item_text = item_page_soup.find("div", attrs={"itemprop": "description"})
 
             if(item_text != None):
                 item_text = item_text.text
+            else:
+                item_text = "Отсутствует или скрыт"
+
+            time.sleep(5)
 
             # Номер телефона как картинка
-            item_phone_img_bs64 = json.loads(requests.get("https://www.avito.ru/items/phone/" + item_id).text)["image64"][22:]
+            driver.get("https://www.avito.ru/items/phone/" + item_id)
+            item_phone_img_bs64 = json.loads(driver.find_element(By.TAG_NAME, "pre").text)["image64"][22:]
             item_phone_img_path = "images/id"+item_id+".png"
             with open(item_phone_img_path, "wb") as fh:
                 fh.write(base64.decodebytes(item_phone_img_bs64.encode()))
@@ -99,7 +110,9 @@ def parse(url):
             worksheet.write('C'+str(row_index), item_address)
             worksheet.write('D'+str(row_index), item_text)
 
-            time.sleep(2)
+            print(">> processed item " + str(i))
+
+            time.sleep(5)
         
         # Если больше нет - цикл закрывается
         if soup.find("span", attrs={"data-marker": "pagination-button/next"}) == None:
@@ -108,8 +121,7 @@ def parse(url):
             page_number += 1;
             url = start_url + "&p=" + str(page_number)
 
-        time.sleep(2)
-
-    workbook.close()
+        workbook.close()
+        time.sleep(5)
 
 parse(url=r'https://www.avito.ru/rossiya?q=продажа+евровагонки')
